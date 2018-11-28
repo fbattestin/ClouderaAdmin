@@ -442,6 +442,16 @@
         ─ From the Cloudera Manager YARN page, select Actions > Enable High Availability, and select the host for the standby ResourceManager
         
 # YARN Application Log Aggregation
+
+https://hadoop.apache.org/docs/current/hadoop-yarn/hadoop-yarn-site/YarnCommands.html
+    
+    yarn application -list -appStates ALL
+    yarn application -list -appStates FINISHED
+    yarn application -list -appStates RUNNING
+    yarn application -list -appStates FAILED
+    
+    yarn logs -applicationId <appId> | less
+    
     ▪ Debugging distributed processes is intrinsically difficult
         ─ Cloudera Manager’s log aggregation improves this situation
     ▪ YARN provides application log aggregation services
