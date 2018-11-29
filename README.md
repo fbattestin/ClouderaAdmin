@@ -651,3 +651,114 @@ https://hadoop.apache.org/docs/current/hadoop-yarn/hadoop-yarn-site/YarnCommands
         ─ If these directories are not big enough, then jobs (applications) will fail
         ─ Example: /disk1/yarn/nm, /disk2/yarn/nm
         ─ Used by NodeManagers
+
+# Exploring Hadoop Configuration Settings
+     cd /var/run/cloudera-scm-agent/process
+     $ sudo tree
+       
+     . Compare the first 20 lines of the NameNode’s copy of hdfs-site.xml to the NodeManager’s copy of the same file
+     $ sudo ls | grep NODE
+     $ sudo head -20 nn-hdfs-NAMENODE/core-site.xml
+     $ sudo head -20 nn-yarn-NODEMANAGER/core-site.xml
+     
+     Return to the elephant terminal window and list the contents of the /var/run/cloudera-scm-agent/process directory.
+     $ sudo ls -l /var/run/cloudera-scm-agent/process
+     
+     Find the difference between the old NameNode core-site.xml file and the new one
+      sudo diff -C 2 nn-hdfs-NAMENODE/core-site.xml nn-hdfs-NAMENODE/core-site.xml
+
+# Examining Hadoop Daemon Log Files
+    7. View the NameNode log file using the NameNode Web UI.
+    From the Cloudera Manager HDFS page, click the NameNode Web UI link.
+    From the NameNode Web UI, select Utilities > Logs.
+    The list of directories and files in the /var/log/hadoop-hdfs directory on elephant appears.
+    Open the NameNode log file and review the file.
+    8. Access the daemon logs directly from Cloudera Manager.
+    In Cloudera Manager, choose Hosts > All Hosts from the top navigation bar.
+    Select elephant and then choose the Processes tab.
+    Locate the row for the NameNode and click Full log file.
+    The Log Details page opens at the tail end of the NameNode log file. Scroll up to view earlier log messages.
+    Note: If the log file is very large, and you want to see messages near the top, scrolling in the Cloudera Manager UI will be slow.       Other tools provide quick access to the entire log file.
+    Click Download Full Log to download the entire log.
+    9. Review the NameNode daemons standard error and standard output logs using Cloudera Manager.
+    Return to the Processes page for elephant.
+    Click the Stdout link for the NameNode instance. The standard output log appears.
+    Review the file, then return to the Processes page.
+    Click the Stderr link for the NameNode instance. The standard error log appears.
+    Review the file.
+    Note: if you want to locate these log files on disk, they can be found on elephant
+    in the /var/log/hadoop-hdfs and /var/run/cloudera-scm-agent/
+    process/nn-hdfs-NAMENODE/logs directories.
+    10. Using Cloudera Manager, review recent entries in the SecondaryNameNode logs.
+    To find the log, go to the HDFS Instances page for your cluster, then locate the
+    SecondaryNameNode role type and click the tiger link in the Host column.
+    In the Status page for the tiger host, scroll down to the Roles area and click Role
+    Log File in the SecondaryNameNode column.
+    © Copyright 2010–2018 Cloudera. All Rights Reserved.
+    Not to be reproduced or shared without prior written consent from Cloudera. 44
+    45
+    11. Access the ResourceManager log file using the ResourceManager Web UI.
+    Navigate to the ResourceManager Web UI (from the Cloudera Manager YARN
+    page’s Web UI menu or by specifying the URL http://horse:8088 in your
+    browser).
+    Choose Nodes from the Cluster menu on the left side of the page.
+    Click the horse:8042 link to be taken to the NodeManager Web UI.
+    Expand the Tools menu on the left side of the page.
+    Click Local logs.
+    Finally, click the entry for the ResourceManager log file and review the file.
+    
+    
+# Sqoop Usage Examples
+    ▪ List all databases
+        $ sqoop list-databases --username fred -P \
+        --connect jdbc:mysql://dbserver.example.com/
+    ▪ List all tables in the world database
+        $ sqoop list-tables --username fred -P \
+        --connect jdbc:mysql://dbserver.example.com/world
+    ▪ Import all tables in the world database
+        $ sqoop import-all-tables --username fred --password derf \
+        --connect jdbc:mysql://dbserver.example.com/world
+        
+# The WebHDFS REST API
+    REST: REpresentational State Transfer
+    ▪ Provides an HTTP/HTTPS REST interface to HDFS
+        ─ Supports both reads and writes from/to HDFS
+        ─ Can be accessed from within a program or script
+        ─ Can be used via command-line tools such as curl or wget
+    ▪ Installs with the HDFS service in Cloudera Manager
+        ─ Enabled by default (dfs.webhdfs.enabled)
+    ▪ Requires client access to every DataNode in the cluster
+    ▪ Does not support HDFS HA deployments
+    
+# The HttpFS REST API
+    ▪ Provides an HTTP/HTTPS REST interface to HDFS
+        ─ The interface is identical to the WebHDFS REST interface
+    ▪ Installable part of the HDFS service in Cloudera Manager
+        ─ Choose to install it when install HDFS or Add Role Instances from existing
+    deployed HDFS service
+        ─ Installs and configure an HttpFS server
+        ─ Enables proxy access to HDFS for an httpfs user
+    ▪ Requires client access to the HttpFS server only
+        ─ The HttpFS server then accesses HDFS
+    ▪ Supports HDFS HA deployments
+    
+# The WebHDFS/HttpFS REST Interface Examples
+    ▪ These examples will work with either WebHDFS or HttpFS
+        ─ For WebHDFS, specify the NameNode host and port (default: 50070)
+        ─ For HttpFS, specify the HttpFS server and port (default: 14000)
+    ▪ Open and get the shakespeare.txt file
+        $ curl -i -L "http://host:port/webhdfs/v1/tmp/\shakespeare.txt?op=OPEN&ampuser.name=training"
+    ▪ Make the mydir directory
+    $ curl -i -X PUT "http://host:port/webhdfs/v1/user/\training/mydir?op=MKDIRS&user.name=training"
+
+# Importing Data: Best Practices
+    ▪ Best practice is to import data into a temporary directory
+    ▪ After the file is completely written, move data to the target directory
+        ─ This is an atomic operation
+        ─ Happens very quickly since it merely requires an update of the NameNode’s metadata
+    ▪ Many organizations standardize on a directory structure such as
+        ─ /incoming/<import_job_name>/<files>
+        ─ /for_processing/<import_job_name>/<files>
+        ─ /completed/<import_job_name>/<files>
+    ▪ It is the job’s responsibility to move the files from for_processing to completed after the job has finished successfully
+    ▪ Discussion point: your best practices?
