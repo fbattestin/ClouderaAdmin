@@ -762,3 +762,195 @@ https://hadoop.apache.org/docs/current/hadoop-yarn/hadoop-yarn-site/YarnCommands
         ─ /completed/<import_job_name>/<files>
     ▪ It is the job’s responsibility to move the files from for_processing to completed after the job has finished successfully
     ▪ Discussion point: your best practices?
+
+# Cluster Growth Based on Storage Capacity (PROCESSO DO FRAMEWORK DE DECISAO)
+    ▪ Basing your cluster growth on storage capacity is often a good method
+    ▪ Example:
+        ─ Data grows by approximately 3TB per week
+        ─ HDFS set up to replicate each block three times
+        ─ Therefore, 9TB of extra storage space required per week
+        ─ Plus some overhead—say, 25% of all disk space
+        ─ Assuming machines with 16 x 3TB hard drives, this equates to a new machine required every four weeks
+        ─ Alternatively: Two years of data—1.2 petabytes—will require approximately 35 machines
+        
+# Configuring The System (2)
+    ▪ Hadoop has no specific disk partitioning requirements
+        ─ Use whatever partitioning system makes sense to you
+    ▪ Mount disks with the noatime option
+    ▪ Common directory structure for data mount points:
+        /data/<n>/dfs/nn
+        /data/<n>/dfs/dn
+        /data/<n>/dfs/snn
+        /data/<n>/mapred/local
+    ▪ Reduce the swappiness of the system in /etc/sysctl.conf
+        ─ Set vm.swappiness to 1
+    ▪ Configure IPTables if required by your security policies—Hadoop requires many ports for communication
+        ─ From Cloudera Manager’s Cluster page, choose Configuration > All Port
+    Configurations to see all ports used
+    
+# Configuring The System (3)
+    ▪ Disable Transparent Huge Page compaction
+        ─ Can degrade the performance of Hadoop workloads
+        ─ Open the defrag file of your OS to see if it is enabled
+        ─ Red Hat/CentOS: /sys/kernel/mm/\redhat_transparent_hugepage/defrag
+        ─ Ubuntu/Debian, OEL, SLES: /sys/kernel/mm/\transparent_hugepage/defrag
+        ─ A line reading [always] never means it is enabled
+        ─ A line reading [never] always means it is disabled
+        ─ To temporarily disable it
+    $ sudo sh -c "echo 'never' > defrag_file_pathname"
+        ─ Add the following to /etc/rc.local to persist the change
+      echo never > defrag_file_pathname
+      
+# Filesystem Considerations
+    ▪ Cloudera recommends that you use one of the following filesystems tested on the supported operating systems:
+        ─ ext3: The most tested underlying filesystem for HDFS
+        ─ ext4: Scalable extension of ext3, supported in more recent Linux releases
+        ─ XFS: The default filesystem in RHEL 7
+
+# Operating System Parameters
+    ▪ Increase the nofile ulimit for the cloudera-scm user to at least 32K
+        ─ Cloudera Manager sets this to 32K in /usr/sbin/cmf-agent by default
+    ▪ Disable IPv6
+    ▪ Disable SELinux if possible
+        ─ Incurs a performance penalty on a Hadoop cluster
+        ─ Configuration is non-trivial
+        ─ When doing this, disable it on each host before deploying CDH on the cluster
+    ▪ Install and configure the ntp daemon
+        ─ Ensures the time on all nodes is synchronized
+        ─ Important for HBase, ZooKeeper, Kerberos
+        ─ Useful when using logs to debug problems
+
+# Java Virtual Machine (JVM) Requirements
+    ▪ Always use the official Oracle JDK (http://java.com/)
+        ─ Only 64-bit JDKs from Oracle are supported
+        ─ Oracle JDK 7 is supported across all versions of Cloudera Manager 5 and CDH 5
+        ─ Oracle JDK 8 is supported in C5.3.x and higher
+    ▪ Running CDH nodes within the same cluster on different JDK releases is not supported
+        ─ JDK release across a cluster needs to match the patch level
+        ─ All nodes in your cluster must run the same Oracle JDK version
+        ─ All services must be deployed on the same Oracle JDK version
+    ▪ For version specific information see:
+        ─ http://tiny.cloudera.com/jdk
+        
+# Essential Points of Configuration
+    ▪ Master nodes run the NameNode, Standby NameNode (or Secondary NameNode), and ResourceManager
+        ─ Provision with carrier-class hardware and lots of RAM
+    ▪ Worker nodes run DataNodes and NodeManagers
+        ─ Provision with industry-standard hardware
+        ─ Consider your data storage growth rate when planning current and future cluster size
+    ▪ RAID (on worker nodes) and virtualization can incur a performance penalty
+    ▪ Make sure that forward and reverse domain lookups work when configuring a cluster
+    ▪ Consider Cloudera Director and Cloud Options for cost savings / other benefits
+
+# Hive Tables
+    ▪ A Hive Table represents an HDFS directory
+        ─ Hive interprets all files in the directory as the contents of the table
+        ─ Hive stores information about how the rows and columns are delimited within the files in the Hive Metastore
+    ▪ Tables are created as either managed or external
+        ─ Managed
+        ─ If the table is dropped, the schema and the HDFS data is deleted
+        ─ External
+        ─ If the table is dropped, only the table schema is deleted
+    ▪ The default location for any table is /user/hive/warehouse
+        ─ This path can be overridden by using the LOCATION keyword
+
+# Hive Is Not an RDBMS
+    ▪ Note that Hive is not an RDBMS!
+        ─ Results take several seconds, minutes, or even hours to be produced
+        ─ Not possible to modify the data using HiveQL
+        ─ UPDATE and DELETE are not supported
+        
+# Hive Service Roles Installed by Cloudera Manager
+    ▪ Hive Metastore Server
+        ─ Manages the remote Metastore process
+    ▪ HiveServer2
+        ─ Supports the Thrift API used by clients
+        ─ Has a Hive CLI named Beeline
+    ▪ Hive Gateway
+    ─ To deploy Hive client configurations to specific nodes in the cluster, add the Hive Gateway role instance to those nodes
+    ─ Nodes with the Gateway role instance will receive the latest client configurations when you choose Deploy Client Configuration from  Cloudera Manager
+    ─ Client Configuration files can also be manually downloaded and distributed
+    
+# Hive Metastore Server (Remote mode)
+    ─ Recommended deployment mode
+    ─ Datastore resides in a standalone RDBMS such as MySQL
+    ─ HiveServer2 and other processes, such as Impala, communicate with the metastore service via JDBC
+    ─ Advantage over Local mode:
+    ─ Do not need to share JDBC login information for metastore database with each Hive user
+    ▪ Local mode
+    ─ Functionality of Metastore Server embedded in the HiveServer process
+    ─ Database runs separately, accessed via JDBC
+    ▪ Embedded mode
+    ─ Supports only one active user—for experimental purposes only
+    ─ Uses Apache Derby, a Java-based RDBMS
+
+# HiveServer2
+    ▪ HiveServer2 runs Hive as a server
+        ─ A container for the Hive execution engine
+        ─ Enables remote clients to execute queries against Hive and retrieve the results
+        ─ Accessible via JDBC, ODBC, or Thrift
+        ─ Example clients: Beeline (the Hive CLI), Hue (Web UI)
+    ▪ Supports concurrent queries from more than one Hive client
+        ─ Why is concurrency support needed?
+        ─ Example: a Hive client issues a DROP TABLE command, while at the same time another Hive client running on a different machine runs 
+            SELECT query against the same table
+        ─ Hive concurrency requires ZooKeeper to guard against data corruption
+
+# HiveServer2 Uses ZooKeeper
+    ▪ ZooKeeper is a distributed coordination service for Hadoop
+        ─ Allows processes to share information with each other in a reliable and redundant way
+    ▪ Used for many purposes
+        ─ Examples: Leader election, distributed synchronization, failure recovery
+    ▪ ZooKeeper always runs on an odd number of machines
+        ─ Called a “ZooKeeper ensemble”
+        ─ Makes the service highly available
+    ▪ HiveServer2 uses ZooKeeper to support concurrent clients
+        ─ Client processes could be running on different machines
+    ▪ Other Hadoop components can share the same ZooKeeper ensemble
+    
+# Configuring Hive on Spark or MapReduce
+    ▪ Hive in CDH supports two execution engines: MapReduce and Spark
+    ▪ Execution engine used by Beeline—can be set per query
+        ─ Run the set hive.execution.engine=engine command
+        ─ Where engine is either mr or spark. The default is mr
+    ▪ Cloudera Manager (Affects all queries, not recommended)
+        ─ Configuration tab of Hive service
+        ─ Set the Default Execution Engine to MapReduce or Spark. The default is MapReduce.
+
+# Cloudera Search (Solr)
+    ▪ Cloudera Search provides an interactive full-text search capability for data in
+    your Hadoop cluster
+    ─ Makes the data accessible to non-technical audiences
+    ─ Compare: Write code for Spark or MapReduce vs SQL queries vs use a search
+    engine
+    ─ Foundation of Cloudera Search is Apache Solr
+    ─ High-performance, scalable, reliable
+    ─ Indexing and query can be distributed
+    ─ Open source, standard Solr APIs and Web UI
+    ─ Supports 30 languages
+    ─ Integration with HDFS, MapReduce, HBase, and Flume
+    ─ Support for common Hadoop file formats
+    ─ Hue web-based dashboard and search interface
+    ─ Apache Sentry access control
+
+
+# How Cloudera Search Works
+    ▪ Client connects to a Solr host in the cluster
+        ─ Hardcoded in client to connect to a single host
+        ─ Zookeeper ensemble: round robin Solr hosts
+        ─ Supported for Java SolrJ API only
+        ─ Load balancer: for more sophisticated distribution and resiliency
+    ▪ Solr host
+        ─ Distributes search work to other Solr nodes
+        ─ Aggregates results (including its own)
+        ─ Return results to client
+
+# Indexing
+    ▪ Data must be indexed prior to search
+        ─ Indexing involves data extraction, transformation, and is similar to database
+    design
+        ─ Once indexed, basic queries and advanced queries are possible
+    ▪ Data indexing methods
+        ─ Use Flume to index data on entry to cluster
+        ─ Use MapReduce for batch index of data in HDFS
+        ─ Indexing of data in HBase is also available
