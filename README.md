@@ -1380,3 +1380,404 @@ Mapper outputs
     ▪ Option to synchronize HDFS ACLs and Sentry permissions
         ─ Set user access permissions and securely share the same HDFS data with other components (Pig, Spark, MR, and HDFS clients, and so on)
         ─ Example use case: importing data into Hive using Sqoop
+        
+# The YARN Scheduler
+    ▪ The ResourceManager’s scheduling component (the YARN Scheduler) is responsible for assigning available resources to YARN applications
+        ─ The scheduler decides where and when containers will be allocated to applications
+        ─ Based on requirements of each application
+        ─ Containers granted specific resources
+        ─ Memory, CPU
+    ▪ Administrators define a scheduling policy that best fits requirements
+        ─ For example, a policy that allocates resources equally among YARN applications
+    ▪ The scheduling policy establishes rules for resource sharing
+        ─ Rules are well-defined
+        ─ Rules form the basis for application start and completion expectations
+
+# Scheduler Types
+    ▪ YARN supports the following schedulers:
+        ─ First In First Out (FIFO) Scheduler
+            ─ Resources allocated based on time of arrival
+        ─ Capacity Scheduler
+            ─ Resources allocated to pools
+            ─ FIFO scheduling within each pool
+        ─ Fair Scheduler
+            ─ Resources allocated to weighted pools
+            ─ Fair sharing within each pool
+    ▪ The Fair Scheduler is the default YARN scheduler in CDH 5
+        ─ The yarn.resourcemanager.scheduler.class property specifies the scheduler in use
+        
+# The Fair Scheduler
+    ▪ The Fair Scheduler is the YARN Scheduler that Cloudera recommends for production clusters
+    ▪ The Fair Scheduler organizes YARN applications into pools
+        ─ Pools are also known as a queues in YARN terminology
+        ─ Each user get a pool named after the user (by default)
+        ─ Resources are divided fairly between the pools (by default)
+    ▪ Fair Scheduler characteristics
+        ─ Allows resources to be controlled proportionally
+        ─ Promotes efficient utilization of cluster resources
+        ─ Promotes fairness between schedulable entities
+        ─ Allows short interactive and long production applications to coexist
+        ─ Awards resources to pools that are most underserved
+        ─ Gives a container to the pool that has the fewest resources allocated
+        
+# Fair Scheduler Pools
+    ▪ Each application is assigned to a pool
+    ▪ All pools descend from the root pool
+    ▪ Pools can be nested as subpools in which case siblings share the parent’s resources
+    ▪ Physical resources are not bound to any specific pool
+    ▪ Pools can be predefined or defined dynamically by specifying a pool name when you submit an application
+    
+# Determining the Fair Share
+▪ The fair share of resources assigned to the pool is based on
+─ The total resources available across the cluster
+─ The number of pools competing for cluster resources
+▪ Excess cluster capacity is spread across all pools
+─ The aim is to maintain the most even allocation possible so every pool
+receives its fair share of resources
+▪ The fair share will never be higher than the actual demand
+▪ Pools can use more than their fair share when other pools are not in need of
+resources
+─ This happens when there are no tasks eligible to run in other pools
+
+Single Resource Fairness
+▪ Fair scheduling with Single Resource Fairness
+─ Schedules applications on the basis of a single resource: memory
+▪ Example
+─ Two pools: Alice has been allocated 15GB, and Bob has 5GB
+─ Both pools request a 10GB container of memory
+─ Bob has fewer resources at the moment and will be granted the next 10GB
+that becomes available
+
+Dominant Resource Fairness
+▪ Fair scheduling with Dominant Resource Fairness (recommended)
+─ Schedules applications on the basis of both memory and CPU
+▪ Example: A cluster has 10GB of total memory and 20 cores
+─ Pool Alice has containers granted for 4GB of memory and 5 cores
+─ Pool Bob has containers granted for 1GB of memory and 10 cores
+─ Alice will receive the next container because its 40% dominant share of
+memory is less than the Bob pool’s 50% dominant share of CPU
+
+Minimum Resources
+▪ A pool with minimum resources defined receives priority during resource
+allocation
+▪ The minimum resources are the minimum amount of resources that must be
+allocated to the pool prior to fair share allocation
+─ Minimum resources are allocated to each pool, assuming there is cluster
+capacity
+
+Minimum Allocation Example
+▪ 30GB memory available on the cluster
+─ First, fill up the Production pool to the 20GB minimum guarantee
+─ Then distribute the remaining 10GB evenly across Alice and Bob
+
+Minimum Allocation Example 2: Production Pool Empty
+▪ Production has no demand, so no resources are allocated to it
+▪ All resources are allocated evenly between Alice and Bob
+
+Minimum Allocation Example 3: Min Memory Exceeds Resources
+▪ Combined minimum memory requirements of Production and Research
+exceed capacity
+▪ Resources are assigned proportionally based on defined minimum resources
+until available memory is exhausted
+▪ No memory remains for pools without min memory defined (Bob)
+
+
+Pools with Weights
+▪ Instead of (or in addition to) setting minimum resource requirements, pools
+can be assigned a weight
+▪ Pools with higher weight receive more resources during allocation
+▪ Thinking of pools as water glasses, the fair scheduler evens the height of the
+water:
+─ Think of the weight as controlling the “width” of the glass
+
+
+Fair Scheduler Preemption (1)
+▪ Recall that pools can use more than their fair share when other pools are not
+in need of resources
+─ This resource sharing is typically a good thing
+▪ There may be occasions when a pool needs its fair share back
+─ Example: production applications must run within a set time period
+─ Some pools must operate on an SLA (Service Level Agreement)
+─ Solution: the preemption feature allows the cluster to be used by less critical
+applications while also ensuring important applications are not starved for
+too long
+▪ If yarn.scheduler.fair.preemption is enabled:
+─ the Fair Scheduler kills containers that belong to pools operating over their
+fair share beyond a configurable timeout
+─ Pools operating below fair share receive those reaped resources
+▪ CM default: preemption is not enabled
+
+Fair Scheduler Preemption (2)
+▪ There are two types of preemption available
+─ Minimum share preemption
+─ Fair share preemption
+▪ Preemption avoids killing a container in a pool if it would cause that pool to
+begin preempting containers in other pools
+─ This prevents a potentially endless cycle of pools killing one another’s
+containers
+▪ Use fair share preemption conservatively
+─ Set the Min Share Preemption Timeout to the number of seconds a pool is
+under fair share before preemption should begin
+─ Default is infinite
+
+
+Options for Configuring the YARN Scheduler
+▪ Two options are available for specifying how YARN applications share
+resources
+1. Manually configuring the YARN Scheduler
+2. Configure Dynamic Resource Pools (recommended)
+─ Configures the YARN Scheduler for you
+
+
+Dynamic Resource Pools Overview
+▪ A Dynamic Resource Pool (DRP) specifies a set of resources and a scheduling
+policy for “applications” running in the pool
+─ Applications can be YARN applications or Impala queries
+▪ Useful for dynamically apportioning the percentage of cluster resources
+allocated to YARN and Impala
+─ If Static Service Pool (cgroup) settings are in force, the dynamic
+apportionment will be within the percentage of resources granted to YARN
+or Impala
+▪ Dynamic Resource Pools are the recommended method to configure the Fair
+Scheduler
+▪ DRPs can also be used to configure Impala admission control or resource
+management for Impala
+─ Discussed later in the chapter
+
+Why Configure Dynamic Resource Pools?
+▪ Reasons to create Dynamic Resource Pools
+─ For calendar-based scheduling purposes
+─ Create Configuration Sets that can be configured to use different perpool
+CPU and memory settings
+─ To configure rules that determine in which pool an application will run
+─ To set limits on how many applications a given user can run at one time
+▪ Dynamic Resource Pools provide a simple method for configuring the Fair
+Scheduler
+─ Allocate resources across pools
+─ Specify min and max limits and weights
+
+Dynamic Resource Pools—Placement Rules
+▪ In the Dynamic Resource Pools Placement Rules tab, configure rules
+determining in which pool an application will run
+▪ yarn.scheduler.fair.user-as-default-queue
+─ When true (default), the default pool for an application is username
+─ If false, applications run in the default pool
+▪ yarn.scheduler.fair.allow-undeclared-pools
+─ If true (default), applications can declare a new pool at submission
+─ If false, applications specifying unknown pools run in default pool
+▪ Specify a pool in MapReduce using -D mapreduce.job.queuename
+─ In Spark, use spark.yarn.queue
+─ In Impala, use SET REQUEST_POOL=<poolname>
+
+Dynamic Resource Pools—User Limits
+▪ When defining a pool you can set “Max Running Apps” for the pool
+▪ There is also the option to limit the number of applications specific users can
+run at the same time across pools
+─ Define a limit for all users in Default Settings
+─ Define a specific limit for an individual user
+
+YARN—Resource Allocation: Worker Node Configuration
+yarn.nodemanager.resource.memory-mb
+Set in YARN / NodeManager Group / Resource Management
+▪ Amount of RAM available on this host for YARN-managed tasks
+▪ Recommendation: the amount of RAM on the host minus the amount needed for
+non-YARN-managed work (including memory needed by the DataNode daemon)
+▪ Used by the NodeManagers
+yarn.nodemanager.resource.cpu-vcores
+Set in YARN / NodeManager Group / Resource Management
+▪ Number of cores available on this host for YARN-managed tasks
+▪ Recommendation: the number of physical cores on the host minus 1
+▪ Used by the NodeManagers
+
+YARN Scheduler Parameters
+yarn.scheduler.minimum-allocation-mb
+yarn.scheduler.minimum-allocation-vcores
+Set in YARN / ResourceManager Group / Resource Management
+▪ Minimum amount of memory and cpu cores to allocate for a container
+▪ Task requests lower than these minimums will be set to these values
+▪ CM Defaults: 1 GB, 1 vcore
+▪ Memory recommendation: increase up to 4 GB depending on your developers’
+requirements
+▪ Cores recommendation: keep the 1 vcore default
+▪ Used by the ResourceManager
+yarn.scheduler.increment-allocation-mb
+yarn.scheduler.increment-allocation-vcores
+Set in YARN / ResourceManager Group / Resource Management
+▪ Tasks with requests that are not multiples of these increment-allocation values will
+be rounded up to the nearest increments
+▪ CM Defaults: 512MB and 1 vcore
+
+
+YARN—Resource Allocation: Memory Request for Containers
+mapreduce.map.memory.mb and mapreduce.reduce.memory.mb
+Set in YARN / Gateway Group / Resource Management
+▪ Amount of memory to allocate for Map or Reduce tasks
+▪ CM Default: 1 GB
+▪ Recommendation: increase mapreduce.map.memory.mb up to 2 GB, depending
+on your developers’ requirements. Also, set mapreduce.reduce.memory.mb to
+twice the mapper value.
+▪ Used by clients and NodeManagers
+yarn.app.mapreduce.am.resource.mb
+Set in YARN / Gateway Group / Resource Management
+▪ Amount of memory to allocate for the ApplicationMaster
+▪ CM Default: 1 GB
+▪ Recommendation: 1 GB, however you can increase it if jobs contain many concurrent
+tasks.
+▪ Used by clients and NodeManagers
+
+# YARN—Resource Allocation: Memory Request for Containers
+yarn.app.mapreduce.am.command-opts
+Set in YARN / Gateway Group
+▪ Java options passed to the ApplicationMaster
+▪ By Default Application Master gets 1GB of heap space
+▪ Used when MapReduce ApplicationMasters are launched
+mapreduce.map.java.opts
+mapreduce.reduce.java.opts
+Set in YARN / Gateway Group
+▪ Java options passed to Mappers and Reducers
+▪ Default is -Xmx=200m (200MB of heap space)
+▪ Recommendation: increase to a value from 1GB to 4GB, depending on the
+requirements from your developers
+▪ Used when Mappers and Reducers are launched
+
+
+# YARN—Configure Resource Allocation and Process Size
+    Properties
+    ▪ The resource allocation properties do not determine the heap size for the ApplicationMaster, Mappers, and Reducers
+    ▪ Be sure to adjust both the Java heap size properties and the resource allocation properties
+    ▪ For example, if you specified
+        ─ yarn.nodemanager.resource.memory-mb = 8192
+        ─ mapreduce.map.memory.mb = 4096
+        ─ And allowed mapreduce.map.java.opts to default
+    ▪ Then the maximum heap size for Mappers would be 200MB
+        ─ Because mapreduce.map.java.opts defaults to -Xmx=200m
+    ▪ Recommendation: set the Java heap size for Mappers and Reducers to 75% of mapreduce.map.memory.mb and mapreduce.reduce. memory.mb
+
+# YARN Tuning Recommendations
+    ▪ Inventory the vcores, memory, and disks available on each worker node
+    ▪ Calculate the resources needed for other processes
+        ─ Reserve 4GB to 8GB of memory for the OS
+        ─ Reserve resources for any non-Hadoop applications
+        ─ Reserve resources for other any Hadoop components
+        ─ HDFS caching (if configured), NodeManager, DataNode
+        ─ Impalad, HBase RegionServer, Solr, and so on.
+    ▪ Grant the resources not used by the above to your YARN containers
+    ▪ Configure the YARN scheduler and application framework settings
+        ─ Based on the worker node profile determined above
+        ─ Determine the number of containers needed to best support YARN applications based on the type of workload
+        ─ Monitor usage and tune estimated values to find optimal settings
+        
+# Impala Admission Control (1)
+    ▪ Impala Admission Control is a feature that provides a simple and robust way to manage per-pool resource utilization
+        ─ Enable this feature if the cluster is underutilized at some times and overutilized at others
+    ▪ Imposes resource scheduling on concurrent SQL queries without using the YARN scheduler
+        ─ Limits the max number of concurrent Impala queries and memory used by those queries in a given pool
+        ─ Helpful for avoiding OOM issues on busy clusters
+    ▪ Also allows you to limit the max number of queued (waiting) queries
+        ─ Additional queries queued until earlier ones finish
+        ─ As other queries finish queued queries allowed to proceed
+
+# Impala Admission Control (2)
+    ▪ Impala Admission Control is turned off by default
+    ▪ Options for configuring Admission Control for Impala
+        ─ “Enable Dynamic Resource Pools” property for Impala
+        ─ The Recommended approach
+        ─ If true, you can configure Impala Admission Control using DRPs
+        ─ This is the recommended approach
+        ─ “Enable Impala Admission Control” property for Impala
+        ─ If true, this will make Impala use its own single pool configuration
+
+# Impala Admission Control (3)
+    ▪ You can specify different sets of pool names and allocation options for your Impala and YARN deployments
+    ▪ Use case
+        ─ You are setting up a multi-tenant cluster with cgroups
+        ─ You want to allocate a certain portion of the cluster’s resources to Impala and another portion to MapReduce
+
+# When Impala and MapReduce Coexist on the Cluster
+    ▪ Recommendations for when Impala and MapReduce coexist on the cluster:
+        ─ Set cgroup resource limits between MapReduce/YARN and Impala
+        ─ Configure a “Static Service Pool”
+        ─ Percentage allocation to each service will depend on how the cluster will be used
+        ─ Configure Admission Control and query queuing
+        ─ To manage concurrency and memory usage for Impala
+
+# Checking for Corruption in HDFS (1)
+    ▪ hdfs fsck checks for missing or corrupt data blocks
+        ─ Unlike system fsck, does not attempt to repair errors
+    ▪ Can be configured to list all files
+        ─ Also all blocks for each file, all block locations, all racks
+    ▪ Examples:
+    $ hdfs fsck /
+    $ hdfs fsck / -files
+    $ hdfs fsck / -files -blocks
+    $ hdfs fsck / -files -blocks -locations
+    $ hdfs fsck / -files -blocks -locations -racks
+
+# Checking for Corruption in HDFS (2)
+    ▪ Good idea to run hdfs fsck regularly
+        ─ Choose a low-usage time to run the check
+    ▪ -move option moves corrupted files to /lost+found
+        ─ A corrupted file is one where all replicas of a block are missing
+    ▪ -delete option deletes corrupted files
+    
+# Using dfsadmin (1)
+    ▪ The hdfs dfsadmin command provides a number of administrative features including:
+    ▪ List information about HDFS on a per-datanode basis
+    $ hdfs dfsadmin -report
+    ▪ Re-read the dfs.hosts and dfs.hosts.exclude files
+    $ hdfs dfsadmin -refreshNodes
+
+# Using dfsadmin (2)
+    ▪ Manually set the filesystem to “safe mode”
+        ─ NameNode starts up in safe mode
+        ─ Read-only—no changes can be made to the metadata
+        ─ Does not replicate or delete blocks
+        ─ Leaves safe mode when the (configured) minimum percentage of blocks satisfy the minimum replication condition
+        $ hdfs dfsadmin -safemode enter
+        $ hdfs dfsadmin -safemode leave
+        ─ Can also block until safe mode is exited
+        ─ Useful for shell scripts
+        ─ hdfs dfsadmin -safemode wait
+
+# Using dfsadmin (3)
+    ▪ Save the NameNode metadata to disk and resets the edit log
+        ─ Must be in safe mode
+        $ hdfs dfsadmin -saveNamespace
+    ▪ Allow an HDFS directory to be snapshotted
+        $ hdfs dfsadmin -allowSnapshot <directory_name>
+        
+# Copying Data with distcp
+    ▪ distcp copies data within a cluster, or between clusters
+        ─ Used to copy large amounts of data
+        ─ Turns the copy process into a MapReduce job
+    ▪ Copies files or entire directories
+        ─ Files previously copied will be skipped
+        ─ Note that the only check for duplicate files is that the file’s name, size, and checksum are identical
+
+# distcp Examples (1)
+    ▪ Copying data from one cluster to another
+        $ hadoop distcp hdfs://cluster1_nn:8020/path/to/src \
+        hdfs://cluster2_nn:8020/path/to/dest
+    ▪ Copying data within the same cluster
+        $ hadoop distcp /path/to/src /path/to/dest
+        
+# Cluster Rebalancing (1)
+    ▪ HDFS DataNodes on cluster can become “unbalanced”
+        ─ Some nodes have much more data on them than others
+        ─ Example: add a new node to the cluster
+        ─ Even after adding files to HDFS, new node will have far less data than others. During application processing, this node will use much more network bandwidth as it retrieves data from other nodes
+    ▪ Clusters can be rebalanced using the HDFS Rebalance option
+
+# Cluster Rebalancing (2)
+    ▪ Balancer reviews data block placement on nodes and adjusts blocks to ensure all nodes are within the “Rebalancing Threshold”
+        ─ Default: 10%
+    ▪ “Used space to total capacity” ratio on each DataNode will be brought to within the threshold of “used space to total capacity” ratio on the cluster
+    ▪ Balancer does not balance between individual volumes on a single DN
+    ▪ Balancer bandwidth usage can be controlled
+        ─ dfs.datanode.balance.bandwidthPerSec
+        ─ Default: 10MB
+        ─ Recommendation: approx. 0.1 x network speed
+        ─ such as, for a 1Gbps network, 10MB/sec
+        ─ Note: balancer bandwidth can also be set for the current session
+        ─ such as, dfsadmin -setBalancerBandwidth 10485760
+
