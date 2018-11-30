@@ -954,3 +954,429 @@ https://hadoop.apache.org/docs/current/hadoop-yarn/hadoop-yarn-site/YarnCommands
         ─ Use Flume to index data on entry to cluster
         ─ Use MapReduce for batch index of data in HDFS
         ─ Indexing of data in HBase is also available
+        
+# HDFS—NameNode Tuning
+    Para Calcular Logaritmo Natural: https://www.wolframalpha.com/
+    ln(67)*20 = 84
+
+    dfs.namenode.handler.count
+    Set in HDFS / NameNode Group / Performance
+        ▪ The number of server threads for the NameNode that listen to requests from clients
+        ▪ Threads used for RPC calls from clients and DataNodes (heartbeats and metadata operations)
+        ▪ Default in Cloudera Manager: 30 (non-CM default is 10)
+        ▪ Recommended: Natural logarithm of the number HDFS nodes x 20
+        ▪ Symptoms of this being set too low: “connection refused” messages in DataNode logs as they try to transmit block reports to the NameNode
+        ▪ Used by the NameNode
+        
+# HDFS—DataNode Tuning
+    dfs.datanode.failed.volumes.tolerated
+    
+    Set in HDFS / DataNode Group
+        ▪ The number of volumes allowed to fail before the DataNode takes itself offline, ultimately resulting in all of its blocks being re-replicated
+        ▪ CM Default: 0
+        ▪ For each DataNode, set to (number of mountpoints on DataNode host) / 2
+        ▪ Used by DataNodes
+        
+    dfs.datanode.max.locked.memory
+    Set in HDFS / DataNode Group / Resource Management
+        ▪ The maximum amount of memory (in bytes) a DataNode can use for caching
+        ▪ CM Default: 4GB
+        ▪ Must be less than the value of the OS configuration property ulimit -l for the DataNode user
+        ▪ Used by DataNodes
+                
+# File Compression
+    io.compression.codecs
+    Set in HDFS / Service-Wide
+        ▪ List of compression codecs that Hadoop can use for file compression
+        ▪ If you are using another codec, add it here
+        ▪ CM default value includes the following org.apache.hadoop.io.compress
+            codecs: DefaultCodec, GzipCodec, BZip2Codec, DeflateCodec, SnappyCodec, Lz4Codec
+        ▪ Used by clients and all nodes running Hadoop daemons
+
+# MapReduce—Reducer Scheduling and Input Fetch
+    mapreduce.job.reduce.slowstart.completedmaps
+    Set in YARN / Gateway Group
+        ▪ The percentage of Map tasks which must be completed before the ResourceManager
+    will schedule Reducers on the cluster
+        ▪ CM Default: 0.8 (80 percent)
+        ▪ Recommendation: 0.8 (80 percent)
+        ▪ Used by the ResourceManager
+    mapreduce.reduce.shuffle.parallelcopies
+    Set in YARN / Gateway Group
+        ▪ Number of threads a Reducer can use in parallel to fetch Mapper output
+        ▪ CM Default: 10
+        ▪ Recommendation: ln(number of cluster nodes) * 4 with a floor of 10
+        ▪ Used by ShuffleHandler
+        
+
+# MapReduce—Speculative Execution
+    ▪ If a MapReduce task is running significantly more slowly than the average speed of tasks for that job, speculative execution may occur
+        ─ Another attempt to run the same task is instantiated on a different node
+        ─ Results from the first completed task are used, the slower task is killed
+    mapreduce.map.speculative
+    Set in YARN / Gateway Group
+        ▪ Whether to allow speculative execution for Map tasks
+        ▪ CM Default: false, Recommendation: false
+        ▪ Used by MapReduce ApplicationMasters
+    mapreduce.reduce.speculative
+    Set in YARN / Gateway Group
+        ▪ Whether to allow speculative execution for Reduce tasks
+        ▪ CM Default: false, Recommendation: false
+        ▪ Used by MapReduce ApplicationMasters
+        
+# Common Hadoop Ports
+    ▪ Hadoop daemons each provide a Web-based user interface
+        ─ Useful for both users and system administrators
+    ▪ Expose information on a variety of different ports
+        ─ Port numbers are configurable, although there are defaults for most
+    ▪ Hadoop also uses various ports for components of the system to communicate with each other
+    ▪ Full list of ports used by components of CDH 5:
+        ─ http://www.cloudera.com/documentation/enterprise/
+    latest/topics/cdh_ig_ports_cdh5.html
+    ▪ All ports used in a Cluster are listed in one location in Cloudera Manager
+        ─ From the Cluster page’s Configuration menu, choose All Port Configurations
+
+Web UI Ports for Users
+Daemon Default
+Port
+Configuration parameter
+NameNode 50070 dfs.namenode.http-address
+DataNode 50075 dfs.datanode.http.address
+HDFS
+Secondary NameNode 50090 dfs.namenode.secondary.http-address
+ResourceManager 8088 yarn.resourcemanager.webapp.address
+NodeManager 8042 yarn.nodemanager.webapp.address
+YARN
+MR JobHistoryServer 19888 mapreduce.jobhistory.webapp.address
+Cloudera Manager 7180 Configure in Cloudera Manager by going to
+Administration > Settings > Ports and Addresses
+Hue 8888 http_port
+Other
+Spark History Server 18088 history.port
+
+
+Daemon Default
+Port
+Configuration parameter
+NameNode 50070 dfs.namenode.http-address
+DataNode 50075 dfs.datanode.http.address
+HDFS
+Secondary NameNode 50090 dfs.namenode.secondary.http-address
+ResourceManager 8088 yarn.resourcemanager.webapp.address
+NodeManager 8042 yarn.nodemanager.webapp.address
+YARN
+MR JobHistoryServer 19888 mapreduce.jobhistory.webapp.address
+Cloudera Manager 7180 Configure in Cloudera Manager by going to
+Administration > Settings > Ports and Addresses
+Hue 8888 http_port
+Other
+Spark History Server 18088 history.port
+-----
+Daemon Default
+Port
+Configuration Parameter Used for
+NameNode 8020 fs.defaultFS Filesystem metadata
+operations
+DataNode 50010 dfs.datanode.address DFS data transfer
+50020 dfs.datanode.ipc.address Block metadata operations
+and recovery
+ResourceManager 8032 yarn.resourcemanager.address Application submission; used
+by clients
+8033 yarn.resourcemanager.admin.
+address
+Administration RPC server
+port; used by the yarn
+rmadmin client
+8030 yarn.resourcemanager.
+scheduler.address
+Scheduler RPC port; used by
+ApplicationMasters
+8031 yarn.resourcemanager.
+resource-tracker.address
+Resource tracker RPC port;
+used by NodeManagers
+
+
+Daemon Default
+Port
+Configuration Parameter Used for
+NodeManager 8040 yarn.nodemanager.
+localizer.address
+Resource localization
+RPC port
+JobHistoryServer 10020 mapreduce.jobhistory.
+address
+JobHistoryServer RPC
+port; used by clients to
+query job history.
+ShuffleHandler
+(MapReduce’s
+auxiliary service)
+13562 mapreduce.shuffle.port ShuffleHandler’s HTTP
+port; used for serving
+Mapper outputs
+
+
+
+# HDFS—Rack Topology Awareness
+    ▪ Recall that HDFS is rack aware
+        ─ Distributes blocks based on hosts’ locations
+    ▪ To maximize performance, specify network locations of hosts and racks
+        ─ Important for clusters that span more than one rack
+        ─ In the Hosts page in Cloudera Manager, assign hosts to racks
+        ─ Specify Rack ID in the form /datacenter/rack
+        ─ Any host without a specified rack location shows /default location
+        
+# HDFS High Availability Overview
+    ▪ A single NameNode is a single point of failure
+    ▪ Two ways a NameNode can result in HDFS downtime
+        ─ Unexpected NameNode crash (rare)
+        ─ Planned maintenance of NameNode (more common)
+    ▪ HDFS High Availability (HA) eliminates this SPOF
+        ─ Available since CDH4 (or related Apache Hadoop 0.23.x, and 2.x)
+    ▪ New Daemons that HDFS HA introduces to the cluster
+        ─ NameNode (active)
+        ─ NameNode (standby)
+        ─ Failover Controllers
+        ─ Journal Nodes
+    ▪ The Secondary NameNode is not used in an HDFS HA configuration
+
+# HDFS High Availability Architecture (1)
+    ▪ HDFS High Availability uses a pair of NameNodes
+        ─ One Active and one Standby
+        ─ Clients only contact the Active NameNode
+        ─ DataNodes heartbeat in to both NameNodes
+        ─ Active NameNode writes its metadata to a quorum of JournalNodes
+        ─ Standby NameNode reads from the JournalNodes to remain in sync with the Active NameNode
+        
+# HDFS High Availability Architecture (2)
+    ▪ Active NameNode writes edits to the JournalNodes
+        ─ Software to do this is the Quorum Journal Manager (QJM)
+        ─ Built in to the NameNode
+        ─ Waits for a success acknowledgment from the majority of JournalNodes
+        ─ Majority commit means a single crashed or lagging JournalNode will not impact NameNode latency
+        ─ Uses the Paxos algorithm to ensure reliability even if edits are being writtenas a JournalNode fails
+    ▪ Note that there is no Secondary NameNode when implementing HDFS High Availability
+        ─ The Standby NameNode periodically performs checkpointing
+
+# Failover
+    ▪ Only one NameNode must be active at any given time
+        ─ The other is in standby mode
+    ▪ The standby maintains a copy of the active NameNode’s state
+        ─ So it can take over when the active NameNode goes down
+    ▪ Two types of failover
+        ─ Manual (detected and initiated by a user)
+        ─ Automatic (detected and initiated by Hadoop itself)
+        ─ Automatic failover uses ZooKeeper
+        ─ When HA is configured, a daemon called the ZooKeeper Failover Controller (ZKFC) runs on each NameNode machine
+
+# HDFS High Availability and Automatic Failover
+    ▪ Cloudera Manager configures HA using Quorum-based storage
+        ─ Uses a quorum of JournalNodes
+        ─ Each JournalNode maintains a local edits directory
+        ─ That directory contains files detailing namespace metadata modifications
+    ▪ With HA configured, automatic failover is also available
+        ─ Cloudera Manager sets dfs.ha.automatic-failover.enabled to true for the NameNode role instances it configures for HA
+        
+# Fencing
+    ▪ It is essential that exactly one NameNode be active
+        ─ Possibility of split-brain syndrome otherwise
+    ▪ The Quorum Journal Manager ensures that a previously-active NameNode cannot corrupt the NameNode metadata
+    ▪ When configuring HDFS HA, one or more fencing methods must be specified
+        ─ Methods available:
+        ─ shell: the Cloudera Manager default (uses CM Agent). Configure in HDFS > Configuration > Service-Wide > High Availability
+        ─ sshfence: connects to the target node via ssh and kills the process listening on service’s TCP port
+        ─ In order for failover to occur, one of the methods must run successfully
+
+# HDFS HA Deployment—Without Cloudera Manager
+    ▪ Without Cloudera Manager, enabling High Availability for HDFS is a long, complex, error prone process
+        ─ Overview of major steps involved
+            1. Modify multiple Hadoop configurations across all DataNodes
+            2. Install and start the JournalNodes
+            3. If not already installed, configure and start a ZooKeeper ensemble
+            4. Initialize the shared edits directory if converting from a non-HA deployment
+            5. Install, bootstrap, and start the Standby NameNode
+            6. Install, format, and start the ZooKeeper failover controllers
+            7. Restart DataNodes and the YARN and MapReduce daemons
+    ▪ With Cloudera Manager it is a simpler process
+    
+# Enabling HDFS HA Using Cloudera Manager
+    ▪ Three steps to Enable HDFS HA in Cloudera Manager
+    1. Configure directories for JournalNodes to store edits directories
+        ─ Set permissions on these new directories for the hdfs user
+    2. Ensure the ZooKeeper service is installed and enabled for HDFS
+    3. From the HDFS Instances page, run the Enable High Availability wizard
+        ─ Specify the hosts for the two NameNodes and the JournalNodes
+        ─ Specify the JournalNode Edits directory for each host
+        ─ The wizard performs the necessary steps to enable HA
+        ─ Including the creation and configuration of new Hadoop daemons
+
+# After Enabling HDFS HA
+    ▪ After enabling HDFS HA, some manual configurations may be needed
+        ─ For Hive
+        ─ Upgrade the Hive Metastore
+        ─ Consult the Cloudera documentation for details
+        ─ For Impala
+        ─ Complete the same steps as for Hive (above)
+        ─ Next, run INVALIDATE METADATA command from the Impala shell
+        ─ For Hue
+        ─ Add the HttpFS role (if not already on the cluster)
+
+# Kerberos Exchange Participants (1)
+    ▪ Kerberos involves messages exchanged among three parties
+        ─ The client
+        ─ The server providing a desired network service
+        ─ The Kerberos Key Distribution Center (KDC)
+
+# General Kerberos Concepts (2)
+    ▪ Authenticated status is cached
+        ─ You do not need to submit credentials explicitly with each request
+    ▪ Passwords are not sent across network
+        ─ Instead, passwords are used to compute encryption keys
+        ─ The Kerberos protocol uses encryption extensively
+    ▪ Timestamps are an essential part of Kerberos
+        ─ Make sure you synchronize system clocks (NTP)
+    ▪ It is important that reverse lookups work correctly
+
+# Kerberos Terminology
+    ▪ Knowing a few terms will help you with the documentation
+    ▪ Realm
+        ─ A group of machines participating in a Kerberos network
+        ─ Identified by an uppercase domain (EXAMPLE.COM)
+    ▪ Principal
+        ─ A unique identity which can be authenticated by Kerberos
+        ─ Can identify either a host or an individual user
+        ─ Every user in a secure cluster will have a Kerberos principal
+    ▪ Keytab file
+        ─ A file that stores Kerberos principals and associated keys
+        ─ Allows non-interactive access to services protected by Kerberos
+        
+# Hadoop Security Setup Prerequisites
+    ▪ Working Hadoop cluster
+        ─ Installing CDH from parcels or packages is strongly advised!
+        ─ Ensure your cluster actually works before trying to secure it!
+    ▪ Working Kerberos KDC server
+    ▪ Kerberos client libraries installed on all Hadoop nodes
+
+# Configuring Hadoop Security (1)
+    ▪ Hadoop security configuration is a specialized topic
+    ▪ Many specifics depend on
+        ─ Version of Hadoop and related programs
+        ─ Type of Kerberos server used (Active Directory or MIT)
+        ─ Operating system and distribution
+    ▪ You must follow instructions exactly
+        ─ There is little room for misconfiguration
+        ─ Mistakes often result in vague “access denied” errors
+        ─ May need to work around version-specific bugs
+
+# Configuring Hadoop Security (2)
+    ▪ For these reasons, we can’t cover this in depth during class
+    ▪ See the Cloudera Security documentation for detailed instructions
+        ─ Available at http://tiny.cloudera.com/cdh-security
+        ─ Be sure to read the details corresponding to your version of CDH
+    ▪ The security recommendations document manual configurations
+        ─ Configuring Hadoop with Kerberos involves many tedious steps
+        ─ Cloudera Manager (Enterprise) automates many of them
+
+# Securing Related Services
+    ▪ There are many “ecosystem” tools that interact with Hadoop
+    ▪ Most require minor configuration changes for a secure cluster
+        ─ For example, specifying Kerberos principals or keytab file paths
+    ▪ Exact configuration details vary with each tool
+        ─ See documentation for details
+    ▪ Some require no configuration changes at all
+        ─ Such as Pig and Sqoop
+
+# Active Directory Integration
+    ▪ Microsoft’s Active Directory (AD) is a enterprise directory service
+    ─ Used to manage user accounts for a Microsoft Windows network
+    ▪ Recall that every Hadoop user must have a Kerberos principal
+    ─ It can be tedious to set up all these accounts
+    ─ Many organizations would prefer to use AD for Hadoop users
+    ▪ Cloudera’s recommended approach
+    ─ Integrate with Active Directory KDC or run a local MIT Kerberos KDC
+    ─ Create all service principals (like hdfs and mapred) in this realm
+    ▪ Instructions can be found in Cloudera’s CDH Security Guide
+
+# Direct Active Directory Integration with Kerberos
+    ▪ Integrate with an existing Active Directory KDC
+    ▪ Wizard in Cloudera Manager enables Kerberos for the cluster
+        ─ Generates and deploys Kerberos client configuration (krb5.conf)
+        ─ Configures CDH components
+        ─ Generates principals needed by all processes running in the cluster
+
+# Encryption Overview
+    ▪ Encryption seeks to ensure that only authorized users can view, use, or contribute to a data set
+    ▪ Data protection can be applied at three levels within Hadoop:
+        ─ Linux filesystem level
+        ─ Example: Cloudera Navigator Encrypt
+        ─ HDFS level
+        ─ Encryption applied by the HDFS client software
+        ─ HDFS Data At Rest Encryption operates at the HDFS folder level, enabling encryption to be applied only to the HDFS folders where it is needed.
+
+# Navigator Key Trustee should be used
+    ─ Network level
+    ─ Encrypt data just before sending across a network and decrypt it as as it is received. This protection uses industry-standard protocols such as SSL/TLS
+
+# OS Filesystem Level Encryption—Navigator Encrypt
+    ▪ Production ready, and included with the Cloudera Navigator license
+    ▪ Operations at the Linux volume level
+        ─ Capable of encrypting cluster data inside and outside of HDFS
+        ─ No change to application code required
+    ▪ Provides a transparent layer between the application and file system reducing the performance impact of encryption
+    ▪ Navigator Key Trustee
+        ─ The default HDFS encryption uses a local Java keystore
+        ─ Navigator Key Trustee is a “virtual safe-deposit box” keystore server for managing encryption keys, certificates, and passwords
+        ─ Encryption keys stored separately from encrypted data
+
+# HDFS Level “Data at Rest” Encryption
+    ▪ Provides transparent end-to-end encryption of data read from and written to HDFS
+        ─ No change to application code required
+        ─ Data encrypted and decrypted only by the HDFS client
+        ─ HDFS does not store or have access to unencrypted data or keys
+    ▪ Operates at the HDFS folder level
+        ─ Apply to folders where needed
+    ▪ Deployment Overview
+        ─ Use Cloudera Manager to deploy the Hadoop Key Management Server (KMS) service for storing keys
+        ─ Create Encryption Zones, then add files to the Encryption Zones
+
+# Network Level Encryption
+    ▪ Transport Layer Security (TLS)
+        ─ Provides communication security over the network to prevent snooping
+    ▪ Enable TLS between the Cloudera Manager Server and Agents—three levels available
+        ─ Level 1 (good): Encrypts communication between browser and CM and between agents and CM Server
+        ─ Level 2 (better): Adds strong verification of CM Server certificate
+        ─ Level 3 (Best): Authentication of agents to the CM Server using certs
+    ▪ Configure SSL encryption for CDH services (HDFS, YARN, and so on)
+        ─ Example: Encrypt data transferred between DataNodes and between DataNodes and clients
+        ─ Recommendation: enable Kerberos on the cluster first
+        ─ Steps to configure encryption differs for each CDH service
+        ─ See Cloudera documentation for details
+
+# Apache Sentry 
+    ▪ Sentry is a plugin for enforcing role-based authorization for Search, Hive and Impala
+        ─ Stores authorization policy metadata
+        ─ Provides clients with concurrent and secure access to this metadata
+        ─ Database-style authorization for Hive, Impala, and Search
+    ▪ Sentry requirements
+        ─ CDH 4.3 or later
+        ─ HiveServer2 and Hive Metastore running with strong authentication
+        ─ Impala 1.2.1 or later running with strong authentication
+        ─ Kerberos enabled on the cluster
+    ▪ Use Cloudera Manager’s Add Service wizard to install Sentry
+        ─ Requires HDFS and ZooKeeper roles
+        ─ Deploys a “Sentry Server” daemon
+
+# Sentry Access Control Model
+    ▪ What does Sentry control access to?
+        ─ Server, Database, Table, Column, View
+    ▪ Who can access Sentry-controlled objects?
+        ─ Users in a Sentry role
+        ─ Sentry roles = one or more groups
+    ▪ How can role members access Sentry-controlled objects?
+        ─ Read operations (SELECT privilege)
+        ─ Write operations (INSERT privilege)
+        ─ Metadata definition operations (ALL privilege)
+    ▪ Option to synchronize HDFS ACLs and Sentry permissions
+        ─ Set user access permissions and securely share the same HDFS data with other components (Pig, Spark, MR, and HDFS clients, and so on)
+        ─ Example use case: importing data into Hive using Sqoop
